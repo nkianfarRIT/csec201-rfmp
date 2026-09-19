@@ -10,6 +10,22 @@ client.connect((host, port))
 # client.send("Hello s".encode('utf-8')) # <-- same structure as my courses
 client.send("SS,RFMP,v1.0,0".encode('utf-8')) # <-- modified so now the string sends "SS,RFMP,v1,0,0"
 reply = client.recv(2024).decode('utf-8')
-print("Client got:", reply)
+fields = reply.split(",") # <-- same as server side now done as per the document for error codes/description
+# print("Client got:", reply) <-- unused
 
+
+# Verifying if the field were correct using the same structure as the server.py
+# if & elif statements
+# Our set of error codes:
+# 01  malformed packet
+# 02  unsupported protocol or version
+# 03  command failed
+# 04  file error
+
+if fields[0] != "CC":
+    print("Error was:", reply)
+
+else:
+    print("Setup complete, server confirmed the connection")
+    # operation phase goes here later
 client.close()

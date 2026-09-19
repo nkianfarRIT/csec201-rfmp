@@ -20,5 +20,16 @@ message = conn.recv(2024).decode('utf-8')   # "SS,RFMP,v1.0,0" is being recieved
 fields = message.split(",")                 # ["SS", "RFMP", "v1.0", "0"] is being split at the instance of the comma in the string 
 print("Server got:", fields)     # Should print the 4 fields
 
-conn.send("Hello back".encode('utf-8'))
+if fields[0] != "SS" or fields[1] != "RFMP" or fields[2] != "v1.0" or fields[3] != "0":
+    conn.send("EE, 01 or 02, malformed packet or unsupported protocol or version".encode('utf-8'))
+
+# Our set of error codes:
+# 01  malformed packet
+# 02  unsupported protocol or version
+# 03  command failed
+# 04  file error
+
+
+else: 
+    conn.send("CC".encode('utf-8'))
 conn.close()
