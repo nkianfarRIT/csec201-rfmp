@@ -1,4 +1,4 @@
-# Last updated: 19/09/2026
+# Last updated: 20/09/2026
 
 import socket
 
@@ -22,7 +22,7 @@ fields = reply.split(",") # <-- same as server side now done as per the document
 # 03  command failed
 # 04  file error
 
-if fields[0] != "CC":
+if fields[0] != "CC" or len(fields) != 1:
     print("Error was:", reply)
 
 else:
