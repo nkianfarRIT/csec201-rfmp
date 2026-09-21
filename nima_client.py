@@ -28,4 +28,16 @@ if fields[0] != "CC" or len(fields) != 1:
 else:
     print("Setup complete, server confirmed the connection")
     # operation phase goes here later
+    while True:
+        usercommand = str(input("Enter a command: "))
+        if usercommand == "exit" or usercommand == "Exit":
+            client.send("End".encode('utf-8')) # tell the server the user wrote exit
+            break # stop the client loop cause End was sent to server
+        else:
+            # client.send(("CM,prompt,",usercommand).encode('utf-8')) # <-- apparently ,usercommand makes it into a tuple
+            client.send(("CM,prompt," + usercommand).encode('utf-8')) # plus to prevent tuple
+            reply = client.recv(2024).decode('utf-8') # <-- server's reply from the command
+            print("Server:", reply)
+
+
 client.close()

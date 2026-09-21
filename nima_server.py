@@ -1,6 +1,7 @@
-# Last updated: 20/09/2026
+# Last updated: 21/09/2026
 
 import socket
+import subprocess # <-- Importing subprocess to run commands
 import os, sys, stat # <-- Same structure pasted from the sample mycourses
 
 welcomeSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -39,6 +40,26 @@ elif fields[1] != "RFMP" or fields[2] != "v1.0":
 
 else:
     conn.send("CC".encode('utf-8'))
+    # Adding a command loop with one working command plus the end packet
+    while True:
+        msg = conn.recv(2024).decode('utf-8')
+        fields = msg.split("," , 2) # maxsplit=2 so arguments can't break the split 
+
+        if fields[0] == "End":
+            break
+        elif fields[0] == "CM" and len(fields) == 3 and fields[1] == "prompt":
+            # run fields[2] (e.g. "mkdir folder1") with subprocess.run(..., shell=True)
+            # returncode == 0 -> send "SC", else send "EE,03,command failed"
+            # pass # do nothing statement used for testing 
+            result = subprocess.run(fields[2], shell=True)   # runs e.g. "mkdir test1"
+            if result.returncode == 0:
+                conn.send("SC".encode('utf-8'))
+            else:
+                conn.send("EE,03,command failed".encode('utf-8'))
+        else:
+            conn.send("EE,01,malformed packet".encode('utf-8'))
+
+
 
 conn.close()
 welcomeSocket.close() # <-- added this cause there was an error
