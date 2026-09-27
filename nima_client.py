@@ -1,4 +1,4 @@
-# Last updated: 26/09/2026
+# Last updated: 27/09/2026
 
 import socket
 
@@ -36,9 +36,27 @@ def setup_result(client):
 def command_loop(client):
     while True:
         usercommand = str(input("Enter a command: "))
+        
         if usercommand == "exit" or usercommand == "Exit":
             client.send("End".encode('utf-8')) # tell the server the user wrote exit
             break # stop the client loop cause End was sent to server
+        elif usercommand.startswith("openWrite "):
+            filename = usercommand[len("openWrite "):].strip()
+            client.send(("CM,openWrite," + filename).encode('utf-8'))
+            reply = client.recv(2024).decode('utf-8')
+            print("Server:", reply)
+            if reply == "SC":
+                data = input("Enter the text to write: ")
+                client.send(("DP," + data).encode('utf-8'))
+                reply = client.recv(2024).decode('utf-8')
+                print("Server:", reply)
+
+        elif usercommand.startswith("openRead "):
+            filename = usercommand[len("openRead "):].strip()
+            client.send(("CM,openRead," + filename).encode('utf-8'))
+            reply = client.recv(2024).decode('utf-8')
+            print("Server:", reply)
+
         else:
             # client.send(("CM,prompt,",usercommand).encode('utf-8')) # <-- apparently ,usercommand makes it into a tuple
             client.send(("CM,prompt," + usercommand).encode('utf-8')) # plus to prevent tuple
