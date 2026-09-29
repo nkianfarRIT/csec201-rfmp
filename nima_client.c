@@ -56,4 +56,36 @@ int main()
         return 1;
     }
     printf("Connected to server!\n");
+
+
+    // Creating Receive Buffer
+    // Every reply from the server is stored here before we read it
+    char buffer[BUFFER_SIZE];
+
+    // Setup Phase: Sending the Start-Packet
+    // SS = start, RFMP = protocol name, v1.0 = version, 0 = unsecured (no encryption)
+    const char *start_packet = "SS,RFMP,v1.0,0";
+    send(client_fd, start_packet, (int)strlen(start_packet), 0);
+
+    // Setup Phase: Waiting for the Confirm-Connection-Packet
+    // recv returns the number of bytes received (0 = connection closed, negative = error)
+    int bytes = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
+    if(bytes <= 0){
+        printf("No reply from server during setup\n");
+        closesocket(client_fd);
+        WSACleanup();
+        return 1;
+    }
+    // recv does not add the string terminator, so we add it ourselves
+    buffer[bytes] = '\0';
+
+    // Server must reply with exactly CC
+    // Anything else (for example EE,01,malformed packet) is an error
+    if(strcmp(buffer, "CC") != 0){
+        printf("Setup failed, server replied: %s\n", buffer);
+        closesocket(client_fd);
+        WSACleanup();
+        return 1;
+    }
+    printf("Setup complete, server confirmed the connection\n");
 }
