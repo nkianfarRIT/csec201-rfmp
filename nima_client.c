@@ -124,4 +124,10 @@ int main()
             printf("File contents:\n%s\n", buffer);
         }
     }
+    // Closing Phase
+    // The End packet tells the server we are finished, then we clean up
+    send(client_fd, "End", 3, 0);
+    closesocket(client_fd);
+    WSACleanup();
+    return 0;
 }
