@@ -1,4 +1,4 @@
-# Last updated: 28/09/2026
+# Last updated: 30/09/2026
 
 import socket
 import subprocess # <-- Importing subprocess to run commands
@@ -17,19 +17,21 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 host = "127.0.0.1"          # changed from gethostname() in the mycourses
 port = 8888 # Using 8888 as it doesn't interfere with the well-known range of used ports
 
-# MULTITHREADINGNote: the variables below were the single-client globals. They are kept
+# multithreading note: the variables below were the single-client globals. They are kept
 # here for reference, but each ClientThread now has its own copy on self (self.current_dir,
 # self.session_key, ...) so two clients can't overwrite each other's key or directory.
 
 class ClientThread(threading.Thread):
     # One ClientThread per connected client (same structure as myThread in TCPServerExampleThreading.py).
     # Everything on self belongs to that client only.
- 
+    # Every function inside the class takes self as its first parameter, and calls
+    # other functions in the class as self.function_name(...)
+
     def __init__(self, conn, addr):
         threading.Thread.__init__(self)
         self.conn = conn
         self.addr = addr
- 
+
         # per-client copies of the old globals above
         self.current_dir = os.getcwd()
         self.open_write_file = None
@@ -59,12 +61,13 @@ class ClientThread(threading.Thread):
     # new process each call, so a normal shell "cd" would have no effect
     # on the next command.
     current_dir = os.getcwd() # getcwd returns a unicode string of the directory
-    
+
     # Keeps track of a file opened with openWrite so the next DP packet(s)
     # know where to write. None when no file is open for writing. (will be changed when client asks)
     open_write_file = None
 
     # --- Secure-session state (only used when the Start-Packet asked for security = "1") ---
+    # (these are class-level defaults; __init__ sets self.* copies so each thread uses its own)
     secure = False              # whether this connection negotiated encryption
     algorithm = None            # "AES" or "Caesar", chosen by the client in the EC packet
     session_key = None          # raw bytes, decrypted from the client's EC packet using RSA
@@ -106,11 +109,7 @@ class ClientThread(threading.Thread):
         ciphertext = base64.b64decode(encrypted_b64)
         return self.server_private_key.decrypt(
             ciphertext,
-            rsa_padding.OAEP(
-                mgf=rsa_padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            ),
+            rsa_padding.OAEP(mgf=rsa_padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
         )
 
 
@@ -188,8 +187,8 @@ class ClientThread(threading.Thread):
 
     def recieve_setup(self):
         message = self.conn.recv(2024).decode('utf-8')   # "SS,RFMP,v1.0,0" is being recieved from client.py
-        fields = message.split(",")                 # ["SS", "RFMP", "v1.0", "0"] is being split at the instance of the comma in the string 
-        print("From Client to Server:", fields)     # Should print the 4 fields
+        fields = message.split(",")                 # ["SS", "RFMP", "v1.0", "0"] is being split at the instance of the comma in the string
+        print("From Client", self.addr, "to Server:", fields)     # Should print the 4 fields
         return fields
 
     # if fields[0] != "SS" or fields[1] != "RFMP" or fields[2] != "v1.0" or fields[3] != "0":
@@ -204,12 +203,8 @@ class ClientThread(threading.Thread):
 
 
     def validate_setup(self, fields):
-        self.secure
-        self.algorithm
-        self.session_key
-        self.server_private_key
-        self.server_public_key
-  
+        # global secure, algorithm, session_key, server_private_key, server_public_key <-- not needed since using threads (self.*)
+
         if len(fields) != 4 or fields[0] != "SS" or fields[3] not in ("0", "1"):
             # Wrong shape, wrong type, or a secure-flag that isn't 0/1 --> structural problem much better than 01 or 02 error code
             self.conn.send("EE,01,malformed packet".encode('utf-8')) # Fixed the field seperation for both 01 and 02
@@ -260,21 +255,27 @@ class ClientThread(threading.Thread):
             return True
 
     def command_loop(self):
-        # Without current_dir = new_path inside the function would create a brand-new local variable
-        #  that only exists inside that function call and disappears afterward
-        
+    # Without current_dir = new_path inside the function would create a brand-new local variable
+    #  that only exists inside that function call and disappears afterward
+
         # global current_dir, open_write_file <-- not needed since using threads
-    
+
         while True:
             msg = self.conn.recv(2024).decode('utf-8')
+
+            if not msg:
+                # Empty recv = client closed the socket without sending End (e.g. closed the window).
+                # Without this the thread would keep sending EE,01 to a dead socket and crash.
+                break
+
             fields = msg.split("," , 2) # maxsplit=2 so arguments can't break the split
-    
+
             if fields[0] == "End":
                 break
-    
+
             elif fields[0] == "CM" and len(fields) == 3 and fields[1] == "prompt":
                 command = fields[2]
-    
+
                 # cd needs special handling as subprocess.run(shell=True) runs
                 # in its own throwaway process, so a plain "cd folder" would
                 # never actually change directory for the *next* command.
@@ -291,7 +292,7 @@ class ClientThread(threading.Thread):
                     else:
                         self.conn.send("EE,03,command failed".encode('utf-8'))
                     continue
-    
+
                 # run fields[2] (e.g. "mkdir folder1") with subprocess.run(..., shell=True)
                 # returncode == 0 -> send "SC", else send "EE,03,command failed"
                 result = subprocess.run(command, shell=True, cwd=self.current_dir)   # runs e.g. "mkdir test1" inside current_dir
@@ -299,7 +300,7 @@ class ClientThread(threading.Thread):
                     self.conn.send("SC".encode('utf-8'))
                 else:
                     self.conn.send("EE,03,command failed".encode('utf-8'))
-    
+
             elif fields[0] == "CM" and len(fields) == 3 and fields[1] == "openRead":
                 # openRead isn't a prompt command -- it's its own CM subtype.
                 # Server opens the named file in read mode and sends its
@@ -316,7 +317,7 @@ class ClientThread(threading.Thread):
                     self.conn.send(content.encode('utf-8'))
                 except Exception:
                     self.conn.send("EE,04,file error".encode('utf-8'))
-    
+
             elif fields[0] == "CM" and len(fields) == 3 and fields[1] == "openWrite":
                 # openWrite isn't a prompt command either -- it opens/creates
                 # the named file in write mode and keeps it open, waiting for
@@ -329,7 +330,7 @@ class ClientThread(threading.Thread):
                 except Exception:
                     self.open_write_file = None
                     self.conn.send("EE,04,file error".encode('utf-8'))
-    
+
             elif fields[0] == "DP":
                 # Data packet: (DP, text) -- text to save into whichever file
                 # was opened with openWrite. Sent after openWrite, can be sent
@@ -349,13 +350,13 @@ class ClientThread(threading.Thread):
                         self.conn.send("SC".encode('utf-8'))
                     except Exception:
                         self.conn.send("EE,04,file error".encode('utf-8'))
-    
+
             else:
                 self.conn.send("EE,01,malformed packet".encode('utf-8'))
 
         # while True:
         #     msg = conn.recv(2024).decode('utf-8')
-        #     fields = msg.split("," , 2) # maxsplit=2 so arguments can't break the split 
+        #     fields = msg.split("," , 2) # maxsplit=2 so arguments can't break the split
 
         #     if fields[0] == "End":
         #         break
@@ -363,7 +364,7 @@ class ClientThread(threading.Thread):
         #     elif fields[0] == "CM" and len(fields) == 3 and fields[1] == "prompt":
         #         # run fields[2] (e.g. "mkdir folder1") with subprocess.run(..., shell=True)
         #         # returncode == 0 -> send "SC", else send "EE,03,command failed"
-        #         # pass # do nothing statement used for testing 
+        #         # pass # do nothing statement used for testing
         #                     # cd needs special handling -- subprocess.run(shell=True) runs
         #         # in its own throwaway process, so a plain "cd folder" would
         #         # never actually change directory for the *next* command.
@@ -380,7 +381,7 @@ class ClientThread(threading.Thread):
         #             else:
         #                 conn.send("EE,03,command failed".encode('utf-8'))
         #             continue
-    
+
         #         # run fields[2] (e.g. "mkdir folder1") with subprocess.run(..., shell=True)
         #         # returncode == 0 -> send "SC", else send "EE,03,command failed"
         #         result = subprocess.run(fields[2], shell=True)   # runs e.g. "mkdir test1"
@@ -391,22 +392,25 @@ class ClientThread(threading.Thread):
         #     else:
         #         conn.send("EE,01,malformed packet".encode('utf-8'))
 
+# def main():   <-- single-client version, kept for reference
+#     welcomeSocket, conn = start_server(host, port)
+#     fields = recieve_setup(conn)
+#     if validate_setup(conn, fields):
+#         command_loop(conn)
+#     conn.close()
+#     welcomeSocket.close()# <-- added this cause there was an error
 
 def main():
+    # Multithreaded version, same pattern as TCPServerExampleThreading.py:
+    # accept forever, give each client its own ClientThread, go straight back to accept().
     welcomeSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    welcomeSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    welcomeSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # lets the server restart right away without "Address already in use" on port 8888
     welcomeSocket.bind((host, port))
     welcomeSocket.listen(5)
-
     print("Server is listening at port " + str(port))
-
     while True:
         conn, addr = welcomeSocket.accept()
-        print("Client connected!")
-
         t1 = ClientThread(conn, addr)
         t1.start()
 
-
 main()
-
