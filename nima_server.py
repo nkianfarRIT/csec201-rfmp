@@ -278,7 +278,7 @@ class ClientThread(threading.Thread):
 
                 # cd needs special handling as subprocess.run(shell=True) runs
                 # in its own throwaway process, so a plain "cd folder" would
-                # never actually change directory for the *next* command.
+                # never actually change directory for the next command.
                 # We detect it here and use os.chdir() on the server itself,
                 # then run every other command inside current_dir via cwd=.
                 stripped = command.strip()
@@ -293,11 +293,16 @@ class ClientThread(threading.Thread):
                         self.conn.send("EE,03,command failed".encode('utf-8'))
                     continue
 
+                # 5 extra comamnds
+
                 # run fields[2] (e.g. "mkdir folder1") with subprocess.run(..., shell=True)
                 # returncode == 0 -> send "SC", else send "EE,03,command failed"
-                result = subprocess.run(command, shell=True, cwd=self.current_dir)   # runs e.g. "mkdir test1" inside current_dir
+                result = subprocess.run(command, shell=True, cwd=self.current_dir, capture_output=True, text=True)   # runs e.g. "mkdir test1" inside current_dir
                 if result.returncode == 0:
-                    self.conn.send("SC".encode('utf-8'))
+                    if command.strip() in ("whoami", "ls", "hostname", "date", "uptime"): # The 5 extra commands
+                        self.conn.send(("SC,\n" + result.stdout).encode('utf-8'))
+                    else:
+                        self.conn.send("SC".encode('utf-8'))
                 else:
                     self.conn.send("EE,03,command failed".encode('utf-8'))
 
