@@ -298,8 +298,7 @@ class ClientThread(threading.Thread):
                     parts = stripped.split()
                     if len(parts) == 3: # has to be 3 parts cause of the how command looks ("ren origin update")
                         try:
-                            os.rename(os.path.join(self.current_dir, parts[1]),
-                                      os.path.join(self.current_dir, parts[2]))
+                            os.rename(os.path.join(self.current_dir, parts[1]), os.path.join(self.current_dir, parts[2]))
                             self.conn.send("SC".encode('utf-8'))
                         except Exception:
                             self.conn.send("EE,03,command failed".encode('utf-8'))
@@ -307,6 +306,17 @@ class ClientThread(threading.Thread):
                         self.conn.send("EE,01,malformed packet".encode('utf-8'))
                     continue
 
+                if stripped.startswith("del "):
+                    parts = stripped.split()
+                    if len(parts) == 2: # 2 parts to delete and then the file name
+                        try:
+                            os.remove(os.path.join(self.current_dir, parts [1]))
+                            self.conn.send("SC".encode('utf-8'))
+                        except Exception:
+                            self.conn.send("EE,03,command failed".encode('utf-8'))
+                    else:
+                        self.conn.send("EE,01,malformedpacket".encode('utf-8'))
+                    continue
 
                 # 5 extra comamnds
 
