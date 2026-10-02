@@ -293,6 +293,21 @@ class ClientThread(threading.Thread):
                         self.conn.send("EE,03,command failed".encode('utf-8'))
                     continue
 
+                # Add compatibility for ren as it doesn't work on MAC so we need os.rename
+                if stripped.startswith("ren "):
+                    parts = stripped.split()
+                    if len(parts) == 3: # has to be 3 parts cause of the how command looks ("ren origin update")
+                        try:
+                            os.rename(os.path.join(self.current_dir, parts[1]),
+                                      os.path.join(self.current_dir, parts[2]))
+                            self.conn.send("SC".encode('utf-8'))
+                        except Exception:
+                            self.conn.send("EE,03,command failed".encode('utf-8'))
+                    else:
+                        self.conn.send("EE,01,malformed packet".encode('utf-8'))
+                    continue
+
+
                 # 5 extra comamnds
 
                 # run fields[2] (e.g. "mkdir folder1") with subprocess.run(..., shell=True)
