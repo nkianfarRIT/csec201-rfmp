@@ -56,4 +56,78 @@ int main()
         return 1;
     }
     printf("Connected to server!\n");
+
+    // Creating Receive Buffer
+    // Every reply from the server is stored here before we read it
+    char buffer[BUFFER_SIZE];
+
+    // Setup Phase: Sending the Start-Packet
+    // SS = start, RFMP = protocol name, v1.0 = version, 0 = unsecured (no encryption)
+    const char *start_packet = "SS,RFMP,v1.0,0";
+    send(client_fd, start_packet, (int)strlen(start_packet), 0);
+
+    // Setup Phase: Waiting for the Confirm-Connection-Packet
+    // recv returns the number of bytes received (0 = connection closed, negative = error)
+    int bytes = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
+    if (bytes <= 0)
+    {
+        printf("No reply from server during setup\n");
+        closesocket(client_fd);
+        WSACleanup();
+        return 1;
+    }
+    // recv does not add the string terminator, so we add it ourselves
+    buffer[bytes] = '\0';
+
+    // Server must reply with exactly CC
+    // Anything else (for example EE,01,malformed packet) is an error
+    if (strcmp(buffer, "CC") != 0)
+    {
+        printf("Setup failed, server replied: %s\n", buffer);
+        closesocket(client_fd);
+        WSACleanup();
+        return 1;
+    }
+    printf("Setup complete, server confirmed the connection\n");
+    // Operation Phase: Asking which file to read
+    // The C client only supports the openRead command
+    // %255s reads one word and stops at 255 characters so filename can't overflow
+    char filename[256];
+    char command[300];
+    printf("Enter filename to read: ");
+    if (scanf("%255s", filename) != 1)
+    {
+        printf("Could not read filename\n");
+        closesocket(client_fd);
+        WSACleanup();
+        return 1;
+    }
+
+    // Building and Sending the Command Packet
+    // Format: CM,openRead,<filename>
+    // snprintf never writes more than the size of command
+    snprintf(command, sizeof(command), "CM,openRead,%s", filename);
+    send(client_fd, command, (int)strlen(command), 0);
+
+    // Receiving the file contents (or an error packet)
+    bytes = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
+    if (bytes > 0)
+    {
+        buffer[bytes] = '\0';
+        // EE = Exception-Packet, for example EE,04,file error when the file can't be opened
+        if (strncmp(buffer, "EE,", 3) == 0)
+        {
+            printf("Server error: %s\n", buffer);
+        }
+        else
+        {
+            printf("File contents:\n%s\n", buffer);
+        }
+    }
+    // Closing Phase
+    // The End packet tells the server we are finished, then we clean up
+    send(client_fd, "End", 3, 0);
+    closesocket(client_fd);
+    WSACleanup();
+    return 0;
 }

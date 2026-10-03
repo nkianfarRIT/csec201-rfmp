@@ -1,0 +1,3 @@
+Hello from the Python server!
+This is a test file.
+RFMP connection is working.
