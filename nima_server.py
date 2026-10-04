@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization, padding as sym
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
-host = "127.0.0.1"          # changed from gethostname() in the mycourses
+host = "0.0.0.0"          # changed from gethostname() in the mycourses
 port = 8888 # Using 8888 as it doesn't interfere with the well-known range of used ports
 
 # multithreading note: the variables below were the single-client globals. They are kept

@@ -7,7 +7,7 @@
 // Linking Windows Socket Library to GCC compilers
 #pragma comment(lib, "ws2_32.lib")
 
-#define SERVER_IP "127.0.0.1" // Server IP address (localhost)
+#define SERVER_IP "10.211.55.2" // Server IP address (localhost)
 #define PORT 8888             // Server port number matching
 #define BUFFER_SIZE 2024
 
