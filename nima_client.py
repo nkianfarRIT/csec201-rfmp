@@ -1,4 +1,4 @@
-# Last updated: 28/09/2026
+# Last updated: 04/10/2026
 
 import socket
 import os
@@ -18,13 +18,11 @@ secure = False
 algorithm = None       # "AES" or "Caesar"
 session_key = None     # raw bytes we generate ourselves, then hand to the server via RSA
 
-
 def connect_to_server(host, port):
     # creating socket, connecting & returning the socket object
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((host, port))
     return client # <-- preventing bug off nothing
-
 
 # ---------------- crypto helpers (same implementations as the server side) ----------------
 
@@ -42,11 +40,9 @@ def pem_to_b64(key_obj, is_private=False):
         )
     return base64.b64encode(pem).decode('utf-8')
 
-
 def b64_to_public_key(b64_str):
     pem = base64.b64decode(b64_str)
     return serialization.load_pem_public_key(pem)
-
 
 def rsa_encrypt_session_key(session_key_bytes, server_public_key):
     # Only the server's matching private key can undo this.
@@ -56,10 +52,8 @@ def rsa_encrypt_session_key(session_key_bytes, server_public_key):
     )
     return base64.b64encode(ciphertext).decode('utf-8')
 
-
 def caesar_shift_from_key(key_bytes):
     return (sum(key_bytes) % 25) + 1
-
 
 def caesar_encrypt(text, shift):
     result = []
@@ -71,10 +65,8 @@ def caesar_encrypt(text, shift):
             result.append(ch)
     return "".join(result)
 
-
 def caesar_decrypt(text, shift):
     return caesar_encrypt(text, -shift % 26)
-
 
 def aes_encrypt(plaintext_str, key):
     iv = os.urandom(16)
@@ -84,7 +76,6 @@ def aes_encrypt(plaintext_str, key):
     ciphertext = encryptor.update(padded) + encryptor.finalize()
     return base64.b64encode(iv + ciphertext).decode('utf-8')
 
-
 def aes_decrypt(token_b64, key):
     raw = base64.b64decode(token_b64)
     iv, ciphertext = raw[:16], raw[16:]
@@ -93,14 +84,12 @@ def aes_decrypt(token_b64, key):
     unpadder = sym_padding.PKCS7(128).unpadder()
     return (unpadder.update(padded) + unpadder.finalize()).decode('utf-8')
 
-
 def encrypt_text(plaintext_str):
     if algorithm == "AES":
         return aes_encrypt(plaintext_str, session_key)
     else:
         shift = caesar_shift_from_key(session_key)
         return caesar_encrypt(plaintext_str, shift)
-
 
 def decrypt_text(token_str):
     if algorithm == "AES":
@@ -109,12 +98,10 @@ def decrypt_text(token_str):
         shift = caesar_shift_from_key(session_key)
         return caesar_decrypt(token_str, shift)
 
-
 def do_setup(client, secure_flag):
     # sending our string
     # client.send("Hello s".encode('utf-8')) # <-- same structure as my courses
     client.send(("SS,RFMP,v1.0," + secure_flag).encode('utf-8'))
-
 
 def setup_result(client, secure_flag):
     global secure, algorithm, session_key
@@ -165,7 +152,6 @@ def setup_result(client, secure_flag):
 
     return True
 
-
 # Verifying if the field were correct using the same structure as the server.py
 # if & elif statements
 # Our set of error codes:
@@ -174,9 +160,39 @@ def setup_result(client, secure_flag):
 # 03  command failed
 # 04  file error
 
+# Menu shown to the user so they can pick an option instead of typing raw commands
+MENU = """
+========= RFMP Client =========
+ 1) mkdir      - create a folder
+ 2) cd         - change directory
+ 3) rmdir      - delete a folder
+ 4) del        - delete a file
+ 5) ren        - rename a file/folder
+ 6) openRead   - read a file from the server
+ 7) openWrite  - write text to a file on the server
+ 8) Other command (whoami, ls, hostname, date, uptime)
+ 0) Exit
+==============================="""
+def build_command():
+    # Turns the user's menu choice into the same command string the loop already handles
+    print(MENU)
+    choice = input("Choose an option: ").strip()
+    if choice == "1": return "mkdir " + input("Folder name: ").strip()
+    if choice == "2": return "cd " + input("Path: ").strip()
+    if choice == "3": return "rmdir " + input("Folder name: ").strip()
+    if choice == "4": return "del " + input("File name: ").strip()
+    if choice == "5": return "ren " + input("Current name: ").strip() + " " + input("New name: ").strip()
+    if choice == "6": return "openRead " + input("File name: ").strip()
+    if choice == "7": return "openWrite " + input("File name: ").strip()
+    if choice == "8": return input("Command: ").strip()
+    if choice == "0": return "exit"
+    return None  # anything else is an invalid option
 def command_loop(client):
     while True:
-        usercommand = str(input("Enter a command: "))
+        usercommand = build_command()  # menu replaces the old free-text "Enter a command" prompt
+        if usercommand is None:
+            print("Invalid option, try again")
+            continue
         
         if usercommand == "exit" or usercommand == "Exit":
             client.send("End".encode('utf-8')) # tell the server the user wrote exit
